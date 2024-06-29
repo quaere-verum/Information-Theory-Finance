@@ -95,7 +95,7 @@ def discrete_joint_distribution(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     return xy_dist
 
 
-def continuous_binned_mutual_information(x: np.ndarray, y: np.ndarray, x_quantiles: np.ndarray, y_quantiles: np.ndarray) -> float:
+def continuous_binned_mutual_information(x: np.ndarray, y: np.ndarray, x_quantiles: np.ndarray | int, y_quantiles: np.ndarray | int | None) -> float:
     """
     Compute the mutual information between two real-valued random variables X and Y from arrays x and y containing realisations of
     X and Y respectively. First x and y are binned to transform the distributions into a categorical distribution, based on the 
@@ -103,19 +103,30 @@ def continuous_binned_mutual_information(x: np.ndarray, y: np.ndarray, x_quantil
     Args:
         x (np.ndarray): realisations of X of shape (N,)
         y (np.ndarray): realisations of Y of shape (N,)
-        x_quantiles (np.ndarray): quantiles according to which x will be discretised of shape (M,)
-        y_quantiles (np.ndarray): quantiles according to which y will be discretised of shape (M,)
+        x_quantiles (np.ndarray | int): quantiles according to which x will be discretised of shape (M,), or int. If int, the quantiles are
+            np.linspace(0, 1, x_quantiles + 2)[1:-1]
+        y_quantiles (np.ndarray | int, optional): quantiles according to which y will be discretised of shape (M,), or int. If None, assume that
+        y already contains realisations of a discrete random variable. If int, the quantiles are np.linspace(0, 1, y_quantiles + 2)[1:-1]
     Returns:
         float: the mutual information between the discretised X and Y
     """
+    if isinstance(x_quantiles, int):
+        x_quantiles = np.linspace(0, 1, x_quantiles + 2)[1:-1]
+    if isinstance(y_quantiles, int):
+        y_quantiles = np.linspace(0, 1, y_quantiles + 2)[1:-1]
     x_bins = np.quantile(x, q=x_quantiles)
-    y_bins = np.quantile(y, q=y_quantiles)
     x_binned = np.digitize(x, bins=x_bins)
-    y_binned = np.digitize(y, bins=y_bins)
+    if y_quantiles is None:
+        assert np.issubdtype(y.dtype, np.integer)
+        y_binned = y
+    else:
+        y_bins = np.quantile(y, q=y_quantiles)
+        y_binned = np.digitize(y, bins=y_bins)
     return discrete_mutual_information(x_binned, y_binned)
 
 
 if __name__ == '__main__':
+    np.random.seed(123)
     x = np.random.choice(2, 100)
     y = x + 1
     print(f"Deterministic mutual information: {discrete_mutual_information(x, y):.3f}")
@@ -123,3 +134,8 @@ if __name__ == '__main__':
     print(f"Independent mutual information: {discrete_mutual_information(x, y):.3f}")
     y = np.clip(x + np.random.choice(2, 100), 0, 1)
     print(f"Informative mutual information: {discrete_mutual_information(x, y):.3f}")
+
+    x = np.random.normal(size=100)
+    y = np.sign(x).astype(np.int32)
+    x_quantiles = 5
+    print(f"Continuous binned mutual information: {continuous_binned_mutual_information(x, y, x_quantiles, None):.3f}")
